@@ -1,0 +1,45 @@
+02/23/2023 13:07:52 WARNING  [train_model.py:87] Split data not found. Running train_test_split.py
+02/23/2023 13:07:52 WARNING  [train_test_split.py:67] Prepared data not found. Running prepare_ml_data.py
+02/23/2023 13:07:52 WARNING  [prepare_ml_data.py:73] Relaxations not found. Preparing ML files
+02/23/2023 13:07:52 INFO     [get_relaxed_data.py:69] Reading final structures from /home/salil.bavdekar/ml-gasp/test_dir
+02/23/2023 13:07:52 INFO     [get_relaxed_data.py:71] Found 3 GASP IDs
+02/23/2023 13:07:52 INFO     [get_relaxed_data.py:84] Getting relaxation runs using 32 cores
+02/23/2023 13:08:02 INFO     [get_relaxed_data.py:87] Found 29 relaxed structures
+02/23/2023 13:08:02 INFO     [prepare_ml_data.py:78] Reading elements from /home/salil.bavdekar/ml-gasp/test_dir/ga_parameters
+02/23/2023 13:08:02 INFO     [prepare_ml_data.py:82] Finished. Elements: ('N', 'Si')
+02/23/2023 13:08:02 INFO     [prepare_ml_data.py:85] Getting file IDs from /home/salil.bavdekar/ml-gasp/test_dir/relaxations
+02/23/2023 13:08:02 INFO     [prepare_ml_data.py:90] Number of structures: 29
+02/23/2023 13:08:02 INFO     [prepare_ml_data.py:99] Getting structures
+02/23/2023 13:08:02 INFO     [prepare_ml_data.py:104] Finished
+02/23/2023 13:08:02 INFO     [prepare_ml_data.py:106] Calculating molar fractions
+02/23/2023 13:08:02 INFO     [prepare_ml_data.py:113] Finished
+02/23/2023 13:08:02 INFO     [prepare_ml_data.py:115] Calculating average energy per atom
+02/23/2023 13:08:02 INFO     [prepare_ml_data.py:122] Finished. 
+02/23/2023 13:08:02 INFO     [prepare_ml_data.py:126] Getting reference energies
+02/23/2023 13:08:02 INFO     [prepare_ml_data.py:128] Finished. Reference energies: {'N': -8.327600125, 'Si': -5.424476625}
+02/23/2023 13:08:02 INFO     [prepare_ml_data.py:131] Calculating formation energies
+02/23/2023 13:08:02 INFO     [prepare_ml_data.py:135] Finished
+02/23/2023 13:08:02 INFO     [prepare_ml_data.py:138] Getting hardness data
+02/23/2023 13:08:02 INFO     [prepare_ml_data.py:143] Finished
+02/23/2023 13:08:02 INFO     [prepare_ml_data.py:146] Getting RDF and ADF matrices and concatenating them into a single descriptor
+02/23/2023 13:08:03 INFO     [prepare_ml_data.py:154] Finished
+02/23/2023 13:08:03 INFO     [prepare_ml_data.py:159] Saving prepared DataFrame to /home/salil.bavdekar/ml-gasp/test_dir/ml_run_data/prepared_data.pkl
+02/23/2023 13:08:03 INFO     [prepare_ml_data.py:162] Finished
+02/23/2023 13:08:03 INFO     [train_test_split.py:73] Finished reading and cleaning prepared data
+02/23/2023 13:08:03 INFO     [train_test_split.py:76] Shuffling and splitting data into training and testing sets
+02/23/2023 13:08:03 INFO     [train_test_split.py:84] Number of GASP IDS in train set: 2
+02/23/2023 13:08:03 INFO     [train_test_split.py:85] Number of GASP IDS in test set: 2
+02/23/2023 13:08:03 INFO     [train_test_split.py:90] Number of structures in train set: 26
+02/23/2023 13:08:03 INFO     [train_test_split.py:91] Number of structures in test set: 3
+02/23/2023 13:08:03 INFO     [train_test_split.py:95] Saving split data to /home/salil.bavdekar/ml-gasp/test_dir/ml_run_data/train_test_split_70.pkl
+02/23/2023 13:08:03 INFO     [train_test_split.py:102] Finished
+02/23/2023 13:08:03 INFO     [train_model.py:95] Finished
+02/23/2023 13:08:03 INFO     [train_model.py:110] Training SVR model
+02/23/2023 13:08:05 INFO     [train_model.py:125] Finished
+02/23/2023 13:08:05 INFO     [train_model.py:128] Testing model
+02/23/2023 13:08:05 INFO     [train_model.py:133] Finished
+02/23/2023 13:08:05 INFO     [train_model.py:134] R2: -617815238.5938288
+02/23/2023 13:08:05 INFO     [train_model.py:135] RMSE: 0.6371670419315563
+02/23/2023 13:08:05 INFO     [train_model.py:136] MAE: 0.637167041416188
+02/23/2023 13:08:05 INFO     [train_model.py:152] Saving model to /home/salil.bavdekar/ml-gasp/test_dir/ml_run_data/formationenergy_SVR_70.pkl
+02/23/2023 13:08:05 INFO     [train_model.py:155] Finished
