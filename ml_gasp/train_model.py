@@ -17,7 +17,6 @@ Options:
   --help                          Show this message and exit.
 """
 
-import json
 import logging
 import shelve
 from pathlib import Path
@@ -100,7 +99,7 @@ def train_model(garun_directory, frac_train, regressor, target):
         logging.info("Finished obtaining prepared data")
 
     # Split data into training and testing sets
-    X_train, X_test, y_train, y_test, scaler = split_data(df, frac_train)
+    X_train, X_test, y_train, y_test, scaler = split_data(df, frac_train, target)
 
     # Create model
     logging.info(f"Training {regressor.upper()} model")
@@ -170,7 +169,7 @@ def train_model(garun_directory, frac_train, regressor, target):
     logging.info(f"Finished")
 
 
-def split_data(df, frac_train=0.8):
+def split_data(df, frac_train, target):
     """
     Split the prepared data into train and test sets by GASP ID, so that structures from the same relaxation run do not cross between the sets.
     If the data has not been prepared, prepare_ml_data.py will be run first.

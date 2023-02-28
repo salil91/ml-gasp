@@ -218,13 +218,13 @@ def plot_learning_curve(ML_model, X, y, cv=5):
             color="green",
         )
 
+        axs[ax_idx].legend(loc="best")
         axs[ax_idx].grid()
 
     axs[0].set_ylim(0, 1)
     axs[0].set_ylabel("Model score")
     axs[1].set_ylabel("Fit time (s)")
-    fig.set_supxlabel("Number of training samples")
-    fig.legend(loc="lower right")
+    fig.supxlabel("Number of training samples")
 
     return fig, learning_curve_dict
 
