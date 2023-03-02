@@ -287,12 +287,13 @@ def get_hardness(file_ID, relax_dir):
 
 
 def get_RDFADF(structure, elements):
-    rdf_tup, adf_tup = calc_tuples(elements)
-    rdf_mat = getRDF_Mat(structure, RDF_Tup=rdf_tup)
-    adf_mat = getADF_Mat(structure, ADF_Tup=adf_tup)
-    descriptor = np.concatenate((rdf_mat, adf_mat), axis=None)
-
-    return descriptor
+    """
+    Calculates the RDF+ADF descriptor for the structure
+    
+    Args:
+            structure: input structure.
+            elements: list of elements in the dataset.
+    """
 
     def calc_tuples(elements):
         """
@@ -542,3 +543,11 @@ def get_RDFADF(structure, elements):
         )  # Combine all vectors to get ADFMatrix
 
         return matrix
+        
+        
+    rdf_tup, adf_tup = calc_tuples(elements)
+    rdf_mat = getRDF_Mat(structure, RDF_Tup=rdf_tup)
+    adf_mat = getADF_Mat(structure, ADF_Tup=adf_tup)
+    descriptor = np.concatenate((rdf_mat, adf_mat), axis=None)
+
+    return descriptor

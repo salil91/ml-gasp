@@ -121,9 +121,8 @@ def ml_metrics(garun_directory, regressor, target, learning_curve):
         with open(learning_curve_json, "w") as f:
             json.dump(learning_curve_dict, f, indent=4, cls=constants.NumpyEncoder)
 
-        logging.info(
-            f"Finished. Saved to {learning_curve_png} and {learning_curve_json}"
-        )
+        logging.info(f"Saved learning curve image to {learning_curve_png}")
+        logging.info(f"Saved learning curve data to {learning_curve_json}")
 
     logging.info("Finished obtaining ML metrics")
 

@@ -171,12 +171,12 @@ def train_model(garun_directory, frac_train, regressor, target):
     )    
     logging.info(f"Saving results to {json_path}")
     model_results_dict = {
-        "target": target
-        "regressor": regressor
-        "frac_train": frac_train
-        "R2": r2
-        "RMSE": rmse
-        "MAE": mae
+        "target": target,
+        "regressor": regressor,
+        "frac_train": frac_train,
+        "R2": r2,
+        "RMSE": rmse,
+        "MAE": mae,
     }
     with open(model_json, "w") as f:
         json.dump(model_results_dict, f, indent=4, cls=constants.NumpyEncoder)
@@ -243,9 +243,9 @@ def split_data(df, frac_train, target):
 
 
 def create_SVR_model(
-    eScale=1,
-    cScale=5,
-    gScale=0.005,
+    e_scale=1,
+    c_scale=5,
+    g_scale=0.005,
     n_iter=50,
 ):
     """
@@ -257,7 +257,7 @@ def create_SVR_model(
         Scale for epsilon parameter in SVR cross-validation.
     c_scale : float, default=5
         Scale for C paramter in SVR cross-validation.
-    g_scale : float, default=0.001
+    g_scale : float, default=0.005
         Scale for gamma parameter in SVR cross-validation.
     n_iter : int, default=50
         Number of iterations for random search cross-validation.
@@ -271,7 +271,7 @@ def create_SVR_model(
 
     # Use random search CV (5-fold) to select best hyperparameters
     param_dist = {
-        "epsilon": scipy.stats.expon(scale=e_scale)
+        "epsilon": scipy.stats.expon(scale=e_scale),
         "C": scipy.stats.expon(scale=c_scale),
         # "gamma": scipy.stats.expon(scale=g_scale),
         "kernel": ["rbf"],

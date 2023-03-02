@@ -4,6 +4,9 @@ This module contains constants used in the ml_gasp package.
 """
 import json
 
+import numpy as np
+
+
 # Sub-directories directly under the GA run directory
 RELAX_DIR_NAME = "relaxations"
 ML_DIR_NAME = "ml_run_data"
