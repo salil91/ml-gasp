@@ -19,6 +19,7 @@ Options:
 
 import logging
 import shelve
+import json
 from pathlib import Path
 
 import click
@@ -70,7 +71,7 @@ def main(garun_directory, frac_train, regressor, target):
         target = "Energy per atom"
     train_model(garun_directory, frac_train, regressor, target)
     print(
-        f"Finished training {regressor} model with a {int(frac_train*100)}% training set."
+        f"Finished training {regressor} model on {target} with a {int(frac_train*100)}% training set."
     )
 
 
@@ -102,7 +103,7 @@ def train_model(garun_directory, frac_train, regressor, target):
     X_train, X_test, y_train, y_test, scaler = split_data(df, frac_train, target)
 
     # Create model
-    logging.info(f"Training {regressor.upper()} model")
+    logging.info(f"Training {regressor.upper()} model on {target}")
     if regressor.upper() == "SVR":
         ML_model = create_SVR_model()
     elif regressor.upper() == "KRR":
@@ -150,22 +151,35 @@ def train_model(garun_directory, frac_train, regressor, target):
     logging.info(f"Finished. Saved to {test_pred_png}")
 
     # Save model
-    shelve_model = (
+    model_shelve = (
         ml_dir
         / f"{target.replace(' ', '').lower()}_{regressor.upper()}_{int(frac_train*100)}.db"
     )
     logging.info(f"Saving model to {shelve_model}")
-    with shelve.open(shelve_model, "c") as db:
+    with shelve.open(model_shelve, "c") as db:
         db["model"] = ML_model
-        db["target"] = target
-        db["frac_train"] = frac_train
-        db["regressor"] = regressor
+        db["X_train"] = X_train
+        db["X_test"] = X_test
+        db["y_train"] = y_train
+        db["y_test"] = y_test
+        db["y_pred"] = y_pred
         db["scaler"] = scaler
-        db["Predicted"] = y_pred
-        db["Expected"] = y_test
-        db["R2"] = r2
-        db["RMSE"] = rmse
-        db["MAE"] = mae
+    
+    model_json = (
+        ml_dir
+        / f"{target.replace(' ', '').lower()}_{regressor.upper()}_{int(frac_train*100)}.json"
+    )    
+    logging.info(f"Saving results to {json_path}")
+    model_results_dict = {
+        "target": target
+        "regressor": regressor
+        "frac_train": frac_train
+        "R2": r2
+        "RMSE": rmse
+        "MAE": mae
+    }
+    with open(model_json, "w") as f:
+        json.dump(model_results_dict, f, indent=4, cls=constants.NumpyEncoder)
     logging.info(f"Finished")
 
 
@@ -229,9 +243,9 @@ def split_data(df, frac_train, target):
 
 
 def create_SVR_model(
-    epsilon=0.1,
+    eScale=1,
     cScale=5,
-    gScale=0.001,
+    gScale=0.005,
     n_iter=50,
 ):
     """
@@ -239,12 +253,12 @@ def create_SVR_model(
 
     Parameters
     ----------
-    epsilon : float, default=0.1
-        Epsilon parameter for SVR.
-    cScale : float, default=5
-        Scale parameter for SVR cross-validation.
-    gScale : float, default=0.001
-        Scale parameter for SVR cross-validation.
+    e_scale : float, default=1
+        Scale for epsilon parameter in SVR cross-validation.
+    c_scale : float, default=5
+        Scale for C paramter in SVR cross-validation.
+    g_scale : float, default=0.001
+        Scale for gamma parameter in SVR cross-validation.
     n_iter : int, default=50
         Number of iterations for random search cross-validation.
 
@@ -255,17 +269,17 @@ def create_SVR_model(
     """
     from sklearn.svm import SVR
 
-    # TODO: Parameter tuning
     # Use random search CV (5-fold) to select best hyperparameters
     param_dist = {
-        "C": scipy.stats.expon(scale=cScale),
-        "gamma": scipy.stats.expon(scale=gScale),
+        "epsilon": scipy.stats.expon(scale=e_scale)
+        "C": scipy.stats.expon(scale=c_scale),
+        # "gamma": scipy.stats.expon(scale=g_scale),
         "kernel": ["rbf"],
     }
     ML_model = RandomizedSearchCV(
-        estimator=SVR(epsilon=epsilon),
+        estimator=SVR(),
         param_distributions=param_dist,
-        cv=4,
+        cv=5,
         scoring="neg_mean_squared_error",
         n_iter=n_iter,
         n_jobs=-1,

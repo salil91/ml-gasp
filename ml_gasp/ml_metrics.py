@@ -119,7 +119,7 @@ def ml_metrics(garun_directory, regressor, target, learning_curve):
             / f"learning_curve_{target.replace(' ', '').lower()}_{regressor.upper()}.json"
         )
         with open(learning_curve_json, "w") as f:
-            json.dump(learning_curve_dict, f, indent=4)
+            json.dump(learning_curve_dict, f, indent=4, cls=constants.NumpyEncoder)
 
         logging.info(
             f"Finished. Saved to {learning_curve_png} and {learning_curve_json}"
@@ -187,7 +187,8 @@ def plot_learning_curve(ML_model, X, y, cv=5):
             train_sizes,
             metric["train_mean"],
             color="blue",
-            marker="-s",
+            linestyle="-",
+            marker="s",
             markersize=5,
             label="Training",
         )
@@ -204,8 +205,8 @@ def plot_learning_curve(ML_model, X, y, cv=5):
             train_sizes,
             metric["test_mean"],
             color="green",
-            linestyle="-o",
-            marker="s",
+            linestyle="-",
+            marker="o",
             markersize=5,
             label="Test",
         )
