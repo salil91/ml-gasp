@@ -7,8 +7,7 @@ Usage: train_model.py [OPTIONS]
                                                                                                                     
 Options:                                                                                                            
   --garun_directory DIRECTORY     Path to directory containing GASP run data                                        
-                                  [default: /home/salil.bavdekar/ml-                                                
-                                  gasp/ml_gasp]
+                                  [default: Current working directory]
   --frac-train FLOAT              Percentage of samples in the training set
                                   [default: 0.8]
   --regressor [KRR|SVR]           [default: SVR]
@@ -17,22 +16,21 @@ Options:
   --help                          Show this message and exit.
 """
 
+import json
 import logging
 import shelve
-import json
 from pathlib import Path
 
 import click
+import constants
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import prepare_ml_data
 import scipy.stats
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.preprocessing import StandardScaler
-
-import constants
-import prepare_ml_data
 
 
 @click.command()
@@ -69,9 +67,12 @@ def main(garun_directory, frac_train, regressor, target):
     """
     if target == "Energy":
         target = "Energy per atom"
+    print(f"Regressor: {regressor}")
+    print(f"Target: {target}")
+    print(f"Fraction of training set: {frac_train}")
     train_model(garun_directory, frac_train, regressor, target)
     print(
-        f"Finished training {regressor} model on {target} with a {int(frac_train*100)}% training set."
+        f"Finished training and testing model."
     )
 
 
@@ -98,12 +99,16 @@ def train_model(garun_directory, frac_train, regressor, target):
         df = prepare_ml_data.prepare_ml_data(garun_directory)
     else:
         logging.info("Finished obtaining prepared data")
+    logging.info(f"Run directory: {garun_directory}")
+    logging.info(f"Fraction of training set: {frac_train}")
+    logging.info(f"Regressor: {regressor}")
+    logging.info(f"Target: {target}")
 
     # Split data into training and testing sets
+    logging.info("Splitting data into training and testing sets")
     X_train, X_test, y_train, y_test, scaler = split_data(df, frac_train, target)
 
     # Create model
-    logging.info(f"Training {regressor.upper()} model on {target}")
     if regressor.upper() == "SVR":
         ML_model = create_SVR_model()
     elif regressor.upper() == "KRR":
@@ -112,6 +117,7 @@ def train_model(garun_directory, frac_train, regressor, target):
         logging.error("Unsupported ML method!")
 
     # Train ML model and return the best set of hyperparameters for predictions
+    logging.info(f"Training model")
     ML_model.fit(X_train, y_train)
     ML_best = ML_model.best_estimator_
     logging.info(f"Finished")
@@ -126,7 +132,7 @@ def train_model(garun_directory, frac_train, regressor, target):
         / f"train_pred_{target.replace(' ', '').lower()}_{regressor.upper()}_{int(frac_train*100)}.png"
     )
     fig_train_pred.savefig(train_pred_png, dpi=300)
-    logging.info(f"Finished. Saved to {train_pred_png}")
+    logging.info(f"Saved to {train_pred_png}")
 
     # Test model
     logging.info("Testing model")
@@ -134,13 +140,12 @@ def train_model(garun_directory, frac_train, regressor, target):
     r2 = r2_score(y_test, y_pred)
     rmse = np.sqrt(mean_squared_error(y_test, y_pred))
     mae = mean_absolute_error(y_test, y_pred)
-    logging.info(f"Finished")
     logging.info(f"R2: {r2}")
     logging.info(f"RMSE: {rmse}")
     logging.info(f"MAE: {mae}")
 
     # Plot testing predictions
-    logging.info("Plotting training predictions")
+    logging.info("Plotting testing predictions")
     fig_test_pred = plot_predictions(y_test, y_pred)
     test_pred_png = (
         ml_dir
@@ -148,14 +153,14 @@ def train_model(garun_directory, frac_train, regressor, target):
         / f"test_pred_{target.replace(' ', '').lower()}_{regressor.upper()}_{int(frac_train*100)}.png"
     )
     fig_test_pred.savefig(test_pred_png, dpi=300)
-    logging.info(f"Finished. Saved to {test_pred_png}")
+    logging.info(f"Saved to {test_pred_png}")
 
     # Save model
-    model_shelve = (
-        ml_dir
-        / f"{target.replace(' ', '').lower()}_{regressor.upper()}_{int(frac_train*100)}.db"
+    model_fname = (
+        f"{target.replace(' ', '').lower()}_{regressor.upper()}_{int(frac_train*100)}"
     )
-    logging.info(f"Saving model to {shelve_model}")
+    model_shelve = ml_dir / f"{model_fname}.db"
+    logging.info(f"Saving model to {model_shelve}")
     with shelve.open(model_shelve, "c") as db:
         db["model"] = ML_model
         db["X_train"] = X_train
@@ -164,12 +169,9 @@ def train_model(garun_directory, frac_train, regressor, target):
         db["y_test"] = y_test
         db["y_pred"] = y_pred
         db["scaler"] = scaler
-    
-    model_json = (
-        ml_dir
-        / f"{target.replace(' ', '').lower()}_{regressor.upper()}_{int(frac_train*100)}.json"
-    )    
-    logging.info(f"Saving results to {json_path}")
+
+    model_json = ml_dir / f"{model_fname}.json"
+    logging.info(f"Saving results to {model_json}")
     model_results_dict = {
         "target": target,
         "regressor": regressor,
@@ -237,7 +239,7 @@ def split_data(df, frac_train, target):
     scaler = StandardScaler()
     X_train = scaler.fit_transform(X_train)
     X_test = scaler.transform(X_test)
-    logging.info("Finished")
+    logging.info("Finished splitting data")
 
     return X_train, X_test, y_train, y_test, scaler
 
@@ -245,8 +247,7 @@ def split_data(df, frac_train, target):
 def create_SVR_model(
     e_scale=1,
     c_scale=5,
-    g_scale=0.005,
-    n_iter=50,
+    n_iter=100,
 ):
     """
     Create Support Vector Regression model using random search cross-validation.
@@ -259,7 +260,7 @@ def create_SVR_model(
         Scale for C paramter in SVR cross-validation.
     g_scale : float, default=0.005
         Scale for gamma parameter in SVR cross-validation.
-    n_iter : int, default=50
+    n_iter : int, default=100
         Number of iterations for random search cross-validation.
 
     Returns
@@ -268,6 +269,8 @@ def create_SVR_model(
         ML model.
     """
     from sklearn.svm import SVR
+
+    logging.info(f"Creating SVR model with RandomizedSearchCV")
 
     # Use random search CV (5-fold) to select best hyperparameters
     param_dist = {
@@ -280,7 +283,7 @@ def create_SVR_model(
         estimator=SVR(),
         param_distributions=param_dist,
         cv=5,
-        scoring="neg_mean_squared_error",
+        scoring="r2",
         n_iter=n_iter,
         n_jobs=-1,
     )
@@ -289,20 +292,20 @@ def create_SVR_model(
 
 
 def create_KRR_model(
-    alpha=1,
-    gScale=0.001,
-    n_iter=50,
+    a_scale=5,
+    g_scale=0.001,
+    n_iter=100,
 ):
     """
     Create Kernel Ridge Regression model using random search cross-validation.
 
     Parameters
     ----------
-    alpha : float, default=1
-        Scale parameter for KRR cross-validation.
-    gScale : float, default=0.001
-        Scale parameter for KRR cross-validation.
-    n_iter : int, default=50
+    a_scale : float, default=5
+        Scale for alpha parameter in KRR cross-validation.
+    g_scale : float, default=0.001
+        Scale for gamma parameter in KRR cross-validation.
+    n_iter : int, default=100
         Number of iterations for random search cross-validation.
 
     Returns
@@ -312,17 +315,19 @@ def create_KRR_model(
     """
     from sklearn.kernel_ridge import KernelRidge
 
+    logging.info(f"Creating KRR model with RandomizedSearchCV")
+
     # Use random search CV (5-fold) to select best hyperparameters
     param_dist = {
-        "alpha": scipy.stats.expon(scale=cScale),
-        "gamma": scipy.stats.expon(scale=gScale),
+        "alpha": scipy.stats.expon(scale=a_scale),
+        # "gamma": scipy.stats.expon(scale=g_scale),
         "kernel": ["rbf"],
     }
     ML_model = RandomizedSearchCV(
         estimator=KernelRidge(),
         param_distributions=param_dist,
         cv=4,
-        scoring="neg_mean_squared_error",
+        scoring="r2",
         n_iter=n_iter,
         n_jobs=-1,
     )

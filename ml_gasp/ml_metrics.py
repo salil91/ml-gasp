@@ -6,27 +6,26 @@ Usage: ml_metrics.py [OPTIONS]
 
 Options:
   --garun_directory DIRECTORY     Path to directory containing GASP run data
-                                  [default: /home/salil.bavdekar/ml-
-                                  gasp/ml_gasp]
+                                  [default: Current working directory]
   --regressor [KRR|SVR]           [default: SVR]
   --target [Energy|Formation Energy|Hardness]
                                   [default: Energy]
   --learning_curve                Flag to plot the learning curve
+  --validation_curve [alpha|gamma|C|epsilon|None]
+                                  [default: None]
   --help                          Show this message and exit.
-  """
+"""
+
 import json
 import logging
 from pathlib import Path
 
 import click
+import constants
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import learning_curve
-
-import constants
 import prepare_ml_data
-import train_model
 
 
 @click.command()
@@ -56,17 +55,27 @@ import train_model
     is_flag=True,
     help="Flag to plot the learning curve",
 )
-def main(garun_directory, regressor, target, learning_curve):
+@click.option(
+    "--validation_curve",
+    type=click.Choice(["alpha", "gamma", "C", "epsilon", "None"], case_sensitive=False),
+    default="None",
+    show_default=True,
+)
+def main(garun_directory, regressor, target, learning_curve, validation_curve):
     """
     Obtain ML metrics such as the learning curve.
     """
     if target == "Energy":
         target = "Energy per atom"
-    ml_metrics(garun_directory, regressor, target, learning_curve)
-    print(f"Finished.")
+    if validation_curve == "None":
+        validation_curve = None
+    print(f"Regressor: {regressor}")
+    print(f"Target: {target}")
+    ml_metrics(garun_directory, regressor, target, learning_curve, validation_curve)
+    print(f"Finished obtaining ML metrics.")
 
 
-def ml_metrics(garun_directory, regressor, target, learning_curve):
+def ml_metrics(garun_directory, regressor, target, learning_curve, validation_curve):
     ml_dir = garun_directory / constants.ML_DIR_NAME
     ml_dir.mkdir(exist_ok=True)
 
@@ -79,6 +88,8 @@ def ml_metrics(garun_directory, regressor, target, learning_curve):
         filemode="w",
         level=logging.INFO,
     )
+    logging.info(f"Regressor: {regressor}")
+    logging.info(f"Target: {target}")
 
     # Read pickle with descriptors and targets
     try:
@@ -94,46 +105,55 @@ def ml_metrics(garun_directory, regressor, target, learning_curve):
     X = np.vstack(df["Descriptor"])
     y = df[target].to_numpy()
 
-    # Create model
-    logging.info(f"Creating {regressor.upper()} model")
-    if regressor.upper() == "SVR":
-        ML_model = train_model.create_SVR_model()
-    elif regressor.upper() == "KRR":
-        ML_model = train_model.create_KRR_model()
-    else:
-        logging.error("Unsupported ML method!")
-
     # Learning curve
     if learning_curve:
         logging.info("Plotting learning curve")
-        fig_learning_curve, learning_curve_dict = plot_learning_curve(ML_model, X, y)
+        fig_learning_curve, learning_curve_dict = plot_learning_curve(regressor, X, y)
 
-        learning_curve_png = (
-            ml_dir
-            / f"learning_curve_{target.replace(' ', '').lower()}_{regressor.upper()}.png"
+        learning_curve_fname = (
+            f"learning_curve_{target.replace(' ', '').lower()}_{regressor.upper()}.png"
         )
+        learning_curve_png = ml_dir / f"{learning_curve_fname}.png"
         fig_learning_curve.savefig(learning_curve_png, dpi=300)
 
-        learning_curve_json = (
-            ml_dir
-            / f"learning_curve_{target.replace(' ', '').lower()}_{regressor.upper()}.json"
-        )
+        learning_curve_json = ml_dir / f"{learning_curve_fname}.json"
         with open(learning_curve_json, "w") as f:
             json.dump(learning_curve_dict, f, indent=4, cls=constants.NumpyEncoder)
 
         logging.info(f"Saved learning curve image to {learning_curve_png}")
         logging.info(f"Saved learning curve data to {learning_curve_json}")
 
+    # Validation curve
+    if validation_curve:
+        logging.info(f"Plotting validation curve for parameter {validation_curve}")
+        fig_validation_curve, validation_curve_dict = plot_validation_curve(
+            regressor,
+            X,
+            y,
+            parameter=validation_curve,
+        )
+
+        validation_curve_fname = f"validation_curve_{target.replace(' ', '').lower()}_{regressor.upper()}_{validation_curve}.png"
+        validation_curve_png = ml_dir / f"{validation_curve_fname}.png"
+        fig_validation_curve.savefig(validation_curve_png, dpi=300)
+
+        validation_curve_json = ml_dir / f"{validation_curve_fname}.json"
+        with open(validation_curve_json, "w") as f:
+            json.dump(validation_curve_dict, f, indent=4, cls=constants.NumpyEncoder)
+
+        logging.info(f"Saved validation curve image to {validation_curve_png}")
+        logging.info(f"Saved validation curve data to {validation_curve_json}")
+
     logging.info("Finished obtaining ML metrics")
 
 
-def plot_learning_curve(ML_model, X, y, cv=5):
+def plot_learning_curve(regressor, X, y, cv=5):
     """
     Plot learning curve for ML model.
 
     Parameters
     ----------
-    ML_model : sklearn.model_selection.RandomizedSearchCV
+    regressor : str
         ML model.
     X : numpy.ndarray
         Training data.
@@ -147,12 +167,25 @@ def plot_learning_curve(ML_model, X, y, cv=5):
     fig : matplotlib.figure.Figure
         Learning curve figure.
     """
+    import train_model
+    from sklearn.model_selection import learning_curve
+
+    # Create model
+    logging.info(f"Creating {regressor.upper()} model")
+    if regressor.upper() == "SVR":
+        ML_model = train_model.create_SVR_model()
+    elif regressor.upper() == "KRR":
+        ML_model = train_model.create_KRR_model()
+    else:
+        logging.error("Unsupported ML method!")
+
     train_sizes, train_scores, test_scores, fit_times, score_times = learning_curve(
         estimator=ML_model,
         X=X,
         y=y,
         train_sizes=np.linspace(0.1, 1.0, 10),
         cv=cv,
+        scoring="r2",
         n_jobs=-1,
         return_times=True,
     )
@@ -227,6 +260,116 @@ def plot_learning_curve(ML_model, X, y, cv=5):
     fig.supxlabel("Number of training samples")
 
     return fig, learning_curve_dict
+
+
+def plot_validation_curve(regressor, X, y, parameter, cv=5):
+    """
+    Plot validation curve for ML model.
+
+    Parameters
+    ----------
+    regressor : str
+        ML model.
+    X : numpy.ndarray
+        Training data.
+    y : numpy.ndarray
+        Training target.
+    parameter : str
+        Parameter to vary.
+    cv : int, default=5
+        Number of cross-validation folds.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Validation curve figure.
+    """
+    from sklearn.model_selection import validation_curve
+
+    # Create model
+    if regressor.upper() == "SVR":
+        from sklearn.svm import SVR
+
+        ML_model = SVR(kernel="rbf")
+    elif regressor.upper() == "KRR":
+        from sklearn.kernel_ridge import KernelRidge
+
+        ML_model = KernelRidge(kernel="rbf")
+    else:
+        logging.error("Unsupported regressor!")
+
+    param_range = np.logspace(-5, 5, 11)
+    train_scores, test_scores = validation_curve(
+        estimator=ML_model,
+        X=X,
+        y=y,
+        param_name=parameter,
+        param_range=param_range,
+        cv=cv,
+        scoring="r2",
+        n_jobs=-1,
+    )
+
+    validation_curve_dict = {
+        "parameter": parameter,
+        "param_range": param_range,
+        "train_scores": train_scores,
+        "test_scores": test_scores,
+    }
+
+    scores = {
+        "train_mean": np.mean(train_scores, axis=1),
+        "train_std": np.std(train_scores, axis=1),
+        "test_mean": np.mean(test_scores, axis=1),
+        "test_std": np.std(test_scores, axis=1),
+    }
+
+    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 6))
+
+    ax.plot(
+        param_range,
+        scores["train_mean"],
+        color="blue",
+        linestyle="-",
+        marker="s",
+        markersize=5,
+        label="Training",
+    )
+
+    ax.fill_between(
+        param_range,
+        scores["train_mean"] + scores["train_std"],
+        scores["train_mean"] - scores["train_std"],
+        alpha=0.15,
+        color="blue",
+    )
+
+    ax.plot(
+        param_range,
+        scores["test_mean"],
+        color="green",
+        linestyle="-",
+        marker="o",
+        markersize=5,
+        label="Test",
+    )
+
+    ax.fill_between(
+        param_range,
+        scores["test_mean"] + scores["test_std"],
+        scores["test_mean"] - scores["test_std"],
+        alpha=0.15,
+        color="green",
+    )
+
+    ax.legend(loc="best")
+    ax.grid()
+    ax.set_ylim(0, 1)
+    ax.set_ylabel("Model score")
+    ax.set_xlabel(parameter)
+    ax.set_xscale("log")
+
+    return fig, validation_curve_dict
 
 
 if __name__ == "__main__":

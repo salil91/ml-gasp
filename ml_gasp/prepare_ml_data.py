@@ -18,19 +18,17 @@ Options:
 
 import itertools
 import logging
-import pickle
 from pathlib import Path
 
 import click
+import constants
+import get_relaxed_data
 import numpy as np
 import pandas as pd
 import yaml
 from pandarallel import pandarallel
 from pymatgen.core.periodic_table import Element
 from pymatgen.io.vasp import Poscar
-
-import constants
-import get_relaxed_data
 
 
 @click.command()
@@ -50,6 +48,7 @@ def main(garun_directory):
 
     The ML directory is created if it does not exist. The relaxed structures are read from the relax directory. If the relax directory does not exist, it is created by running get_relaxed_data.py.
     """
+    print("Preparing ML data")
     prepare_ml_data(garun_directory)
     print("Finished preparing ML data")
 
@@ -72,6 +71,7 @@ def prepare_ml_data(garun_directory):
         filemode="w",
         level=logging.INFO,
     )
+    logging.info(f"Run directory: {garun_directory}")
 
     if not relax_dir.exists():
         logging.warning("Relaxations not found. Preparing ML files")
@@ -289,7 +289,7 @@ def get_hardness(file_ID, relax_dir):
 def get_RDFADF(structure, elements):
     """
     Calculates the RDF+ADF descriptor for the structure
-    
+
     Args:
             structure: input structure.
             elements: list of elements in the dataset.
@@ -317,7 +317,7 @@ def get_RDFADF(structure, elements):
 
         return rdf_tup, adf_tup
 
-    def getRDF_Mat(cell, RDF_Tup, cutOffRad=10.01, sigma=0.2, stepSize=0.1):
+    def getRDF_Mat(cell, RDF_Tup, cutOffRad=6.01, sigma=0.2, stepSize=0.1):
 
         """
         Calculates the RDF for the structure.
@@ -416,7 +416,7 @@ def get_RDFADF(structure, elements):
 
         return matrix
 
-    def getADF_Mat(cell, ADF_Tup, cutOffRad=10.01, sigma=0.2, stepSize=0.1, k=2.5):
+    def getADF_Mat(cell, ADF_Tup, cutOffRad=6.01, sigma=0.2, stepSize=0.1, k=2.5):
         """
         Calculates the ADF for every structure.
 
@@ -543,11 +543,14 @@ def get_RDFADF(structure, elements):
         )  # Combine all vectors to get ADFMatrix
 
         return matrix
-        
-        
+
     rdf_tup, adf_tup = calc_tuples(elements)
     rdf_mat = getRDF_Mat(structure, RDF_Tup=rdf_tup)
     adf_mat = getADF_Mat(structure, ADF_Tup=adf_tup)
     descriptor = np.concatenate((rdf_mat, adf_mat), axis=None)
 
     return descriptor
+
+
+if __name__ == "__main__":
+    main()
