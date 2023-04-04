@@ -20,7 +20,7 @@ from pathlib import Path
 
 import click
 from intrinsic_hardness import bond_detectors, hardness_calculators
-from pymatgen.io.vasp import Oszicar, Poscar, Xdatcar
+from pymatgen.io.vasp import Oszicar, Xdatcar
 
 import constants
 
@@ -58,10 +58,12 @@ def get_relaxed_data(garun_directory, hardness):
 
     # Set up logging
     script_name = Path(__file__).stem
+    log_path = ml_dir / f"{script_name}.log"
+    Path(log_path).unlink(missing_ok=True)
     logging.basicConfig(
         format="%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
-        filename=ml_dir / f"{script_name}.log",
+        filename=log_path,
         filemode="w",
         level=logging.INFO,
     )

@@ -64,10 +64,12 @@ def prepare_ml_data(garun_directory):
 
     # Set up logging
     script_name = Path(__file__).stem
+    log_path = ml_dir / f"{script_name}.log"
+    Path(log_path).unlink(missing_ok=True)
     logging.basicConfig(
         format="%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
-        filename=ml_dir / f"{script_name}.log",
+        filename=log_path,
         filemode="w",
         level=logging.INFO,
     )
@@ -115,15 +117,23 @@ def prepare_ml_data(garun_directory):
         axis=1,
     )
     logging.info("Finished")
+    
+    logging.info("Getting energies")
+    # Get total energy of the structure
+    df["Total Energy"] = df["File ID"].apply(
+        get_energy,
+        axis=1,
+        relax_dir=relax_dir,
+    )
+    logging.info("Finished.")
 
     logging.info("Calculating average energy per atom")
     # Get average energy per atom for the structures
     df["Energy per atom"] = df.apply(
-        calc_ave_epa,
+        calc_epa,
         axis=1,
-        relax_dir=relax_dir,
     )
-    logging.info("Finished. ")
+    logging.info("Finished.")
 
     # Get the reference energies for elem_A and elem_B
     # i.e. the lowest avg_energy of pure element structures in the dataset
@@ -204,23 +214,36 @@ def calc_mol_frac(structure, elements):
     return molar_frac
 
 
-def calc_ave_epa(row, relax_dir):
+def get_energy(file_ID, relax_dir):
     """
     Calculate the average energy per atom for the structure.
 
     Args:
-        row: row of the DataFrame.
+        file_ID: File ID of the structure.
 
         relax_dir: Path to the directory containing the relaxed structures.
 
     Returns:
         epa: average energy per atom.
     """
-    with open(relax_dir / f"{row['File ID']}.{constants.ENERGY_EXT}") as f:
+    with open(relax_dir / f"{file_ID}.{constants.ENERGY_EXT}") as f:
         energy = float(f.read())
 
+    return energy
+    
+
+def calc_epa(row):
+    """
+    Calculate the average energy per atom for the structure.
+
+    Args:
+        row: row of the DataFrame.
+
+    Returns:
+        epa: average energy per atom.
+    """
     structure = row["Structure"]
-    epa = energy / len(structure)
+    epa = row["Total Energy"] / len(structure)
 
     return epa
 
@@ -317,7 +340,7 @@ def get_RDFADF(structure, elements):
 
         return rdf_tup, adf_tup
 
-    def getRDF_Mat(cell, RDF_Tup, cutOffRad=6.01, sigma=0.2, stepSize=0.1):
+    def getRDF_Mat(cell, RDF_Tup, cutOffRad=7.51, sigma=0.2, stepSize=0.1):
 
         """
         Calculates the RDF for the structure.
@@ -416,7 +439,7 @@ def get_RDFADF(structure, elements):
 
         return matrix
 
-    def getADF_Mat(cell, ADF_Tup, cutOffRad=6.01, sigma=0.2, stepSize=0.1, k=2.5):
+    def getADF_Mat(cell, ADF_Tup, cutOffRad=7.51, sigma=0.2, stepSize=0.1, k=5.0):
         """
         Calculates the ADF for every structure.
 

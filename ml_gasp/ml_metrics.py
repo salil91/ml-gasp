@@ -8,11 +8,11 @@ Options:
   --garun_directory DIRECTORY     Path to directory containing GASP run data
                                   [default: Current working directory]
   --regressor [KRR|SVR]           [default: SVR]
-  --target [Energy|Formation Energy|Hardness]
+  --target [Energy|Formation_Energy|Hardness]
                                   [default: Energy]
-  --learning_curve                Flag to plot the learning curve
-  --validation_curve [alpha|gamma|C|epsilon|None]
+  --validation_curve [alpha|gamma|epsilon|C|None]
                                   [default: None]
+  --learning_curve                Flag to plot the learning curve
   --help                          Show this message and exit.
 """
 
@@ -26,6 +26,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import prepare_ml_data
+from sklearn.preprocessing import StandardScaler
 
 
 @click.command()
@@ -39,15 +40,21 @@ import prepare_ml_data
     show_default=True,
 )
 @click.option(
+    "--target",
+    type=click.Choice(["Energy", "Formation_Energy", "Hardness"], case_sensitive=False),
+    default="Energy",
+    show_default=True,
+)
+@click.option(
     "--regressor",
     type=click.Choice(["KRR", "SVR"], case_sensitive=False),
     default="SVR",
     show_default=True,
 )
 @click.option(
-    "--target",
-    type=click.Choice(["Energy", "Formation Energy", "Hardness"], case_sensitive=False),
-    default="Energy",
+    "--validation_curve",
+    type=click.Choice(["alpha", "gamma", "epsilon", "C", "None"], case_sensitive=False),
+    default="None",
     show_default=True,
 )
 @click.option(
@@ -55,13 +62,7 @@ import prepare_ml_data
     is_flag=True,
     help="Flag to plot the learning curve",
 )
-@click.option(
-    "--validation_curve",
-    type=click.Choice(["alpha", "gamma", "C", "epsilon", "None"], case_sensitive=False),
-    default="None",
-    show_default=True,
-)
-def main(garun_directory, regressor, target, learning_curve, validation_curve):
+def main(garun_directory, target, regressor, validation_curve, learning_curve):
     """
     Obtain ML metrics such as the learning curve.
     """
@@ -69,27 +70,33 @@ def main(garun_directory, regressor, target, learning_curve, validation_curve):
         target = "Energy per atom"
     if validation_curve == "None":
         validation_curve = None
-    print(f"Regressor: {regressor}")
     print(f"Target: {target}")
-    ml_metrics(garun_directory, regressor, target, learning_curve, validation_curve)
+    print(f"Regressor: {regressor}")
+    print(f"Learning curve: {learning_curve}")
+    print(f"Validation curve: {validation_curve}")
+    ml_metrics(garun_directory, target, regressor, validation_curve, learning_curve)
     print(f"Finished obtaining ML metrics.")
 
 
-def ml_metrics(garun_directory, regressor, target, learning_curve, validation_curve):
+def ml_metrics(garun_directory, target, regressor, validation_curve, learning_curve):
     ml_dir = garun_directory / constants.ML_DIR_NAME
     ml_dir.mkdir(exist_ok=True)
 
     # Set up logging
     script_name = Path(__file__).stem
+    log_path = ml_dir / f"{script_name}.log"
+    Path(log_path).unlink(missing_ok=True)
     logging.basicConfig(
         format="%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
-        filename=ml_dir / f"{script_name}.log",
+        filename=log_path,
         filemode="w",
         level=logging.INFO,
     )
-    logging.info(f"Regressor: {regressor}")
     logging.info(f"Target: {target}")
+    logging.info(f"Regressor: {regressor}")
+    logging.info(f"Learning curve: {learning_curve}")
+    logging.info(f"Validation curve: {validation_curve}")
 
     # Read pickle with descriptors and targets
     try:
@@ -105,23 +112,10 @@ def ml_metrics(garun_directory, regressor, target, learning_curve, validation_cu
     X = np.vstack(df["Descriptor"])
     y = df[target].to_numpy()
 
-    # Learning curve
-    if learning_curve:
-        logging.info("Plotting learning curve")
-        fig_learning_curve, learning_curve_dict = plot_learning_curve(regressor, X, y)
-
-        learning_curve_fname = (
-            f"learning_curve_{target.replace(' ', '').lower()}_{regressor.upper()}.png"
-        )
-        learning_curve_png = ml_dir / f"{learning_curve_fname}.png"
-        fig_learning_curve.savefig(learning_curve_png, dpi=300)
-
-        learning_curve_json = ml_dir / f"{learning_curve_fname}.json"
-        with open(learning_curve_json, "w") as f:
-            json.dump(learning_curve_dict, f, indent=4, cls=constants.NumpyEncoder)
-
-        logging.info(f"Saved learning curve image to {learning_curve_png}")
-        logging.info(f"Saved learning curve data to {learning_curve_json}")
+    # Feature scaling
+    logging.info("Scaling features")
+    scaler = StandardScaler()
+    X = scaler.fit_transform(X)
 
     # Validation curve
     if validation_curve:
@@ -133,7 +127,7 @@ def ml_metrics(garun_directory, regressor, target, learning_curve, validation_cu
             parameter=validation_curve,
         )
 
-        validation_curve_fname = f"validation_curve_{target.replace(' ', '').lower()}_{regressor.upper()}_{validation_curve}.png"
+        validation_curve_fname = f"validation_curve_{target.replace(' ', '').lower()}_{regressor.upper()}_{validation_curve}"
         validation_curve_png = ml_dir / f"{validation_curve_fname}.png"
         fig_validation_curve.savefig(validation_curve_png, dpi=300)
 
@@ -143,6 +137,24 @@ def ml_metrics(garun_directory, regressor, target, learning_curve, validation_cu
 
         logging.info(f"Saved validation curve image to {validation_curve_png}")
         logging.info(f"Saved validation curve data to {validation_curve_json}")
+
+    # Learning curve
+    if learning_curve:
+        logging.info("Plotting learning curve")
+        fig_learning_curve, learning_curve_dict = plot_learning_curve(regressor, X, y)
+
+        learning_curve_fname = (
+            f"learning_curve_{target.replace(' ', '').lower()}_{regressor.upper()}"
+        )
+        learning_curve_png = ml_dir / f"{learning_curve_fname}.png"
+        fig_learning_curve.savefig(learning_curve_png, dpi=300)
+
+        learning_curve_json = ml_dir / f"{learning_curve_fname}.json"
+        with open(learning_curve_json, "w") as f:
+            json.dump(learning_curve_dict, f, indent=4, cls=constants.NumpyEncoder)
+
+        logging.info(f"Saved learning curve image to {learning_curve_png}")
+        logging.info(f"Saved learning curve data to {learning_curve_json}")
 
     logging.info("Finished obtaining ML metrics")
 
