@@ -144,7 +144,7 @@ def train_model(garun_directory, frac_train, target, regressor):
     train_pred_png = (
         ml_dir
         / ml_dir
-        / f"train_pred_{target.replace(' ', '').lower()}_{regressor.upper()}_{int(frac_train*100)}.png"
+        / f"pred_train_{target.replace(' ', '').lower()}_{regressor.upper()}_{int(frac_train*100)}.png"
     )
     fig_train_pred.savefig(train_pred_png, dpi=300)
     logging.info(f"Saved to {train_pred_png}")
@@ -182,7 +182,7 @@ def train_model(garun_directory, frac_train, target, regressor):
     test_pred_png = (
         ml_dir
         / ml_dir
-        / f"test_pred_{target.replace(' ', '').lower()}_{regressor.upper()}_{int(frac_train*100)}.png"
+        / f"pred_test_{target.replace(' ', '').lower()}_{regressor.upper()}_{int(frac_train*100)}.png"
     )
     fig_test_pred.savefig(test_pred_png, dpi=300)
     logging.info(f"Saved to {test_pred_png}")    
@@ -327,7 +327,7 @@ def create_SVR_model(
 def create_KRR_model(
     a_scale=10,
     g_scale=1e4,
-    n_iter=500,
+    n_iter=1000,
 ):
     """
     Create Kernel Ridge Regression model using random search cross-validation.
