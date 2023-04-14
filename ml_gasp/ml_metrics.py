@@ -21,12 +21,13 @@ import logging
 from pathlib import Path
 
 import click
-import constants
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import prepare_ml_data
 from sklearn.preprocessing import StandardScaler
+
+import constants
+import prepare_ml_data
 
 
 @click.command()
@@ -179,8 +180,9 @@ def plot_learning_curve(regressor, X, y, cv=5):
     fig : matplotlib.figure.Figure
         Learning curve figure.
     """
-    import train_model
     from sklearn.model_selection import learning_curve
+
+    import train_model
 
     # Create model
     logging.info(f"Creating {regressor.upper()} model")

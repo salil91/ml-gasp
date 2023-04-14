@@ -12,7 +12,7 @@ Options:
   --frac-relax FLOAT              Fraction of unrelaxed structures to sample
                                   [default: 1]
   --target [Energy|Formation_Energy|Hardness]
-                                  [default: Formation Energy]
+                                  [default: Formation_Energy]
   --regressor [KRR|SVR]           [default: SVR]
   --help                          Show this message and exit.
 """
@@ -23,15 +23,16 @@ import shelve
 from pathlib import Path
 
 import click
-import constants
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import prepare_ml_data
 import scipy.stats
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.preprocessing import StandardScaler
+
+import constants
+import prepare_ml_data
 
 
 @click.command()
@@ -59,7 +60,7 @@ from sklearn.preprocessing import StandardScaler
 @click.option(
     "--target",
     type=click.Choice(["Energy", "Formation_Energy", "Hardness"], case_sensitive=False),
-    default="Formation Energy",
+    default="Formation_Energy",
     show_default=True,
 )
 @click.option(

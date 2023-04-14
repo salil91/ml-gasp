@@ -29,14 +29,15 @@ import logging
 from pathlib import Path
 
 import click
-import constants
-import get_relaxed_data
 import numpy as np
 import pandas as pd
 import yaml
 from pandarallel import pandarallel
 from pymatgen.core.periodic_table import Element
 from pymatgen.io.vasp import Poscar
+
+import constants
+import get_relaxed_data
 
 
 @click.command()
@@ -154,7 +155,6 @@ def prepare_ml_data(garun_directory, frac_relax, d_c, d_k, k):
     # Get total energy of the structure
     df["Total Energy"] = df["File ID"].apply(
         get_energy,
-        axis=1,
         relax_dir=relax_dir,
     )
     logging.info("Finished.")

@@ -11,22 +11,24 @@ Options:
   --frac-relax FLOAT              Fraction of unrelaxed structures to sample
                                   [default: 0.1]
   --target [Energy|Formation_Energy|Hardness]
-                                  [default: Formation Energy]
+                                  [default: Formation_Energy]
   --regressor [KRR|SVR]           [default: SVR]
   --d-c FLOAT...                  Range for d_c
   --d-k FLOAT...                  Range for d_k
   --k FLOAT...                    Range for k
-  --n INTEGER                     Number of iterations  [default: 10]
+  --n INTEGER                     Number of iterations  [default: 50]
   --help                          Show this message and exit.
 """
-import click
-import random
+import csv
 import logging
+import random
 from pathlib import Path
+
+import click
+
 import constants
 import prepare_ml_data
 import train_model
-import csv
 
 
 @click.command()
@@ -54,7 +56,7 @@ import csv
 @click.option(
     "--target",
     type=click.Choice(["Energy", "Formation_Energy", "Hardness"], case_sensitive=False),
-    default="Formation Energy",
+    default="Formation_Energy",
     show_default=True,
 )
 @click.option(
@@ -84,7 +86,7 @@ import csv
 @click.option(
     "--n",
     help="Number of iterations",
-    default=10,
+    default=50,
     show_default=True,
 )
 def main(garun_directory, frac_train, frac_relax, target, regressor, d_c, d_k, k, n):
@@ -105,6 +107,19 @@ def main(garun_directory, frac_train, frac_relax, target, regressor, d_c, d_k, k
     )
     logging.info(f"Run directory: {garun_directory}")
 
+    # Print input parameters
+    target = target.replace("_", " ")  # Convert to prepared DataFrame column name
+    if target == "Energy":
+        target = "Energy per atom"
+    print(f"Fraction of training set: {frac_train}")
+    print(f"Target: {target}")
+    print(f"Regressor: {regressor}")
+    print(f"Fraction of unrelaxed structures to sample: {frac_relax}")
+    print(f"Range for d_c: {d_c}")
+    print(f"Range for d_k: {d_k}")
+    print(f"Range for k: {k}")
+    print(f"Number of iterations: {n}")
+
     # Write hyperparameters and results to csv
     csv_fname = (
         f"{target.replace(' ', '').lower()}_{regressor.upper()}_{int(frac_train*100)}"
@@ -124,12 +139,12 @@ def main(garun_directory, frac_train, frac_relax, target, regressor, d_c, d_k, k
                 d_c = 6.01
 
             if d_k is not None:
-                d_k = round(random.uniform(d_c[0], d_c[1]), 2)
+                d_k = round(random.uniform(d_k[0], d_k[1]), 2)
             else:
                 d_k = 6.01
 
             if k is not None:
-                k = round(random.uniform(d_c[0], d_c[1]), 2)
+                k = round(random.uniform(k[0], k[1]), 2)
             else:
                 k = 2.5
 
