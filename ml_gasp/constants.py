@@ -19,7 +19,8 @@ HARDNESS_EXT = "hardness"
 
 # Encoder to save NumPy objects in JSONs
 class NumpyEncoder(json.JSONEncoder):
-    """ Special json encoder for numpy types """
+    """Special json encoder for numpy types"""
+
     def default(self, obj):
         if isinstance(obj, np.integer):
             return int(obj)

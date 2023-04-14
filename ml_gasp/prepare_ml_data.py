@@ -41,7 +41,31 @@ from pymatgen.io.vasp import Poscar
     default=".",
     show_default=True,
 )
-def main(garun_directory):
+@click.option(
+    "--frac-relax",
+    help="Fraction of unrelaxed structures to sample",
+    default=0.1,
+    show_default=True,
+)
+@click.option(
+    "--d-c",
+    help="Cut-off distance for RDF calculation",
+    default=6.01,
+    show_default=True,
+)
+@click.option(
+    "--d-k",
+    help="Cut-off distance for ADF calculation",
+    default=6.01,
+    show_default=True,
+)
+@click.option(
+    "--k",
+    help="Parameter to control the slope of the logistic function for the ADF",
+    default=2.5,
+    show_default=True,
+)
+def main(garun_directory, frac_relax, d_c, d_k, k):
     """
     Create the data array for ML. The data array is saved as a pickle file in the ML run directory.
     Columns: File IDs, structure, molar fraction, energy per atom, formation energy, hardness, RDF matrix, and ADF matrix.
@@ -49,11 +73,11 @@ def main(garun_directory):
     The ML directory is created if it does not exist. The relaxed structures are read from the relax directory. If the relax directory does not exist, it is created by running get_relaxed_data.py.
     """
     print("Preparing ML data")
-    prepare_ml_data(garun_directory)
+    prepare_ml_data(garun_directory, frac_relax, d_c, d_k, k)
     print("Finished preparing ML data")
 
 
-def prepare_ml_data(garun_directory):
+def prepare_ml_data(garun_directory, frac_relax, d_c, d_k, k):
     """
     Returns:
         df (DataFrame): DataFrame with prepared ML data
@@ -117,7 +141,7 @@ def prepare_ml_data(garun_directory):
         axis=1,
     )
     logging.info("Finished")
-    
+
     logging.info("Getting energies")
     # Get total energy of the structure
     df["Total Energy"] = df["File ID"].apply(
@@ -148,6 +172,9 @@ def prepare_ml_data(garun_directory):
     )
     logging.info("Finished")
 
+    # Use only part of the unrelaxed structures
+    df = sample_unrelaxed(df, frac_relax)
+
     # Get the hardness data from the .hardness files
     logging.info("Getting hardness data")
     df["Hardness"] = df["File ID"].apply(
@@ -161,7 +188,9 @@ def prepare_ml_data(garun_directory):
         "Getting RDF and ADF matrices and concatenating them into a single descriptor"
     )
     pandarallel.initialize()
-    df["Descriptor"] = df["Structure"].parallel_apply(get_RDFADF, elements=elements)
+    df["Descriptor"] = df["Structure"].parallel_apply(
+        get_RDFADF, elements=elements, d_c=d_c, d_k=d_k, k=k
+    )
     logging.info("Finished")
 
     # Save the DataFrame
@@ -230,7 +259,7 @@ def get_energy(file_ID, relax_dir):
         energy = float(f.read())
 
     return energy
-    
+
 
 def calc_epa(row):
     """
@@ -291,6 +320,36 @@ def calc_formation_energy(row, elements, ref_energies):
     return formation_energy
 
 
+def sample_unrelaxed(df_original, frac_relax=0.1):
+    """
+    Sample a fraction of the unrelaxed structures from the data
+
+    Args:
+        df_original: Dataframe with all the descriptors and target properties
+        frac_relax: Fraction of unrelaxed structures to sample (default 0.1)
+
+    Returns:
+        df: Dataframe with sampled unrelaxed structures
+    """
+    logging.info(f"Sampling {int(frac_relax*100)}% of the unrelaxed structures")
+    frames = []
+    gasp_IDs = df_original["GASP ID"].unique()
+    for gasp_ID in gasp_IDs:
+        df_id = df_original[df_original["GASP ID"] == gasp_ID]
+        run_ids = df_id["Run ID"].to_numpy()
+        run_ids.sort()
+        relaxed_id = run_ids[-1]
+        run_ids = run_ids[:-1]
+        num_select = int(frac_relax * len(run_ids))
+        selected = np.random.choice(run_ids, replace=False, size=num_select)
+        selected = np.append(selected, relaxed_id)
+        df_selected = df_id[df_id["Run ID"].isin(selected)]
+        frames.append(df_selected)
+    df = pd.concat(frames)
+
+    return df
+
+
 def get_hardness(file_ID, relax_dir):
     """
     Get the hardness for the structure.
@@ -309,13 +368,16 @@ def get_hardness(file_ID, relax_dir):
     return hardness
 
 
-def get_RDFADF(structure, elements):
+def get_RDFADF(structure, elements, d_c=6.01, d_k=6.01, k=2.5):
     """
     Calculates the RDF+ADF descriptor for the structure
 
     Args:
             structure: input structure.
             elements: list of elements in the dataset.
+            d_c: cutoff distance for the RDF (default 6.01).
+            d_k: cutoff distance for the ADF (default 6.01).
+            k: parameter to control the slope of the logistic function for the ADF (default 2.5).
     """
 
     def calc_tuples(elements):
@@ -340,7 +402,7 @@ def get_RDFADF(structure, elements):
 
         return rdf_tup, adf_tup
 
-    def getRDF_Mat(cell, RDF_Tup, cutOffRad=7.51, sigma=0.2, stepSize=0.1):
+    def getRDF_Mat(cell, RDF_Tup, cutOffRad=d_c, sigma=0.2, stepSize=0.1):
 
         """
         Calculates the RDF for the structure.
@@ -439,7 +501,7 @@ def get_RDFADF(structure, elements):
 
         return matrix
 
-    def getADF_Mat(cell, ADF_Tup, cutOffRad=7.51, sigma=0.2, stepSize=0.1, k=5.0):
+    def getADF_Mat(cell, ADF_Tup, cutOffRad=d_k, k=k, sigma=0.2, stepSize=0.1):
         """
         Calculates the ADF for every structure.
 
@@ -531,7 +593,7 @@ def get_RDFADF(structure, elements):
                             )
                         else:
                             continue
-                        # Use a logistic cutoff that decays sharply, check paper for details [d_k=3, k=2.5]
+                        # Use a logistic cutoff that decays sharply, check paper for details
                         AB_transform = k * (3 - AB)
                         f_AB.append(np.exp(AB_transform) / (np.exp(AB_transform) + 1))
                         BC_transform = k * (3 - BC)

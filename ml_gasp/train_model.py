@@ -1,15 +1,17 @@
 #!/usr/bin python
 """
-Usage: train_model.py [OPTIONS]                                                                                     
-                                                                                                                    
-  Train ML model from pre-split dataset. If the data has not been split,                                            
-  split_data.py will be run first.                                                                                  
-                                                                                                                    
-Options:                                                                                                            
-  --garun_directory DIRECTORY     Path to directory containing GASP run data                                        
-                                  [default: Current working directory]
-  --frac-train FLOAT              Percentage of samples in the training set
+Usage: train_model.py [OPTIONS]
+
+  Train ML model.
+
+Options:
+  --garun_directory DIRECTORY     Path to directory containing GASP run data
+                                  [default: /home/salil.bavdekar/ml-
+                                  gasp/ml_gasp]
+  --frac-train FLOAT              Fraction of samples in the training set
                                   [default: 0.8]
+  --frac-relax FLOAT              Fraction of unrelaxed structures to sample
+                                  [default: 1]
   --target [Energy|Formation_Energy|Hardness]
                                   [default: Formation Energy]
   --regressor [KRR|SVR]           [default: SVR]
@@ -45,8 +47,14 @@ from sklearn.preprocessing import StandardScaler
 )
 @click.option(
     "--frac-train",
-    help="Percentage of samples in the training set",
+    help="Fraction of samples in the training set",
     default=0.8,
+    show_default=True,
+)
+@click.option(
+    "--frac-relax",
+    help="Fraction of unrelaxed structures to sample",
+    default=1,
     show_default=True,
 )
 @click.option(
@@ -61,23 +69,10 @@ from sklearn.preprocessing import StandardScaler
     default="SVR",
     show_default=True,
 )
-def main(garun_directory, frac_train, target, regressor):
+def main(garun_directory, frac_train, frac_relax, target, regressor):
     """
     Train ML model.
     """
-    target = target.replace("_", " ")  # Convert to prepared DataFrame column name
-    if target == "Energy":
-        target = "Energy per atom"
-    print(f"Fraction of training set: {frac_train}")
-    print(f"Target: {target}")
-    print(f"Regressor: {regressor}")
-    train_model(garun_directory, frac_train, target, regressor)
-    print(
-        f"Finished training and testing model."
-    )
-
-
-def train_model(garun_directory, frac_train, target, regressor):
     ml_dir = garun_directory / constants.ML_DIR_NAME
     ml_dir.mkdir(exist_ok=True)
     model_fname = (
@@ -95,12 +90,48 @@ def train_model(garun_directory, frac_train, target, regressor):
         level=logging.INFO,
     )
 
+    target = target.replace("_", " ")  # Convert to prepared DataFrame column name
+    if target == "Energy":
+        target = "Energy per atom"
+    print(f"Fraction of training set: {frac_train}")
+    print(f"Target: {target}")
+    print(f"Regressor: {regressor}")
+    df = get_prepared_data(garun_directory, frac_train, target, regressor, ml_dir)
+    train_model(df, frac_train, frac_relax, target, regressor, ml_dir, model_fname)
+    print(f"Finished training and testing model.")
+
+
+def get_prepared_data(garun_directory, frac_train, target, regressor, ml_dir):
+    """
+    Read prepared data from pickle file or run prepare_ml_data.py if pickle file is not found.
+
+    Parameters
+    ----------
+    garun_directory : Path
+        Path to directory containing GASP run data
+
+    frac_train : float
+        Fraction of samples in the training set
+
+    target : str
+        Target property
+
+    regressor : str
+        ML method
+
+    Returns
+    -------
+    df : pandas.DataFrame
+        Dataframe containing descriptors and target property
+    """
     # Read pickle with descriptors and targets
     try:
         logging.info("Reading prepared data")
         df = pd.read_pickle(ml_dir / constants.PREPARED_DATA_PKL_NAME)
     except FileNotFoundError:
-        logging.warning("Prepared data not found. Running prepare_ml_data.py")
+        logging.warning(
+            "Prepared data not found. Running prepare_ml_data.py with default parameters."
+        )
         df = prepare_ml_data.prepare_ml_data(garun_directory)
     else:
         logging.info("Finished obtaining prepared data")
@@ -109,19 +140,42 @@ def train_model(garun_directory, frac_train, target, regressor):
     logging.info(f"Target: {target}")
     logging.info(f"Regressor: {regressor}")
 
+    return df
+
+
+def train_model(df, frac_train, target, regressor, ml_dir, model_fname):
+    """
+    Train ML model.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Dataframe containing descriptors and target property
+
+    frac_train : float
+        Fraction of samples in the training set
+
+    target : str
+        Target property
+
+    regressor : str
+        ML method
+
+    ml_dir : Path
+        Path to directory containing ML data
+
+    model_fname : str
+        Filename for ML model
+
+    Returns
+    -------
+    None
+    """
     # Split data into training and testing sets
     logging.info("Splitting data into training and testing sets")
-    X_train, X_test, y_train, y_test, scaler = split_data(df, frac_train=frac_train, target=target)
-
-    # Save data to new database
-    model_shelve = ml_dir / f"{model_fname}"
-    logging.info(f"Saving split data to {model_shelve}")
-    with shelve.open(f"{model_shelve}", "n") as db:
-        db["X_train"] = X_train
-        db["X_test"] = X_test
-        db["y_train"] = y_train
-        db["y_test"] = y_test
-        db["scaler"] = scaler
+    X_train, X_test, y_train, y_test, scaler = split_data(
+        df, frac_train=frac_train, target=target
+    )
 
     # Create model
     if regressor.upper() == "SVR":
@@ -137,17 +191,28 @@ def train_model(garun_directory, frac_train, target, regressor):
     ML_best = ML_model.best_estimator_
     ML_params = ML_model.best_params_
 
-    # Plot training predictions
-    logging.info("Plotting training predictions")
-    y_pred_train = ML_best.predict(X_train)
-    fig_train_pred, _ = plot_predictions(y_train, y_pred_train, target)
-    train_pred_png = (
-        ml_dir
-        / ml_dir
-        / f"pred_train_{target.replace(' ', '').lower()}_{regressor.upper()}_{int(frac_train*100)}.png"
-    )
-    fig_train_pred.savefig(train_pred_png, dpi=300)
-    logging.info(f"Saved to {train_pred_png}")
+    # Save data to new database
+    if model_fname is not None:
+        model_shelve = ml_dir / f"{model_fname}"
+        logging.info(f"Saving split data to {model_shelve}")
+        with shelve.open(f"{model_shelve}", "n") as db:
+            db["X_train"] = X_train
+            db["X_test"] = X_test
+            db["y_train"] = y_train
+            db["y_test"] = y_test
+            db["scaler"] = scaler
+
+        # Plot training predictions
+        logging.info("Plotting training predictions")
+        y_pred_train = ML_best.predict(X_train)
+        fig_train_pred, _ = plot_predictions(y_train, y_pred_train, target)
+        train_pred_png = (
+            ml_dir
+            / ml_dir
+            / f"pred_train_{target.replace(' ', '').lower()}_{regressor.upper()}_{int(frac_train*100)}.png"
+        )
+        fig_train_pred.savefig(train_pred_png, dpi=300)
+        logging.info(f"Saved to {train_pred_png}")
 
     # Test model
     logging.info("Testing model")
@@ -160,44 +225,47 @@ def train_model(garun_directory, frac_train, target, regressor):
     logging.info(f"MAE: {mae}")
 
     # Save results
-    model_json = ml_dir / f"{model_fname}.json"
-    model_results_dict = {
-        "target": target,
-        "regressor": regressor,
-        "frac_train": frac_train,
-        "num_train": len(y_train),
-        "num_test": len(y_test),
-        "ML_params": ML_params,
-        "R2": r2,
-        "RMSE": rmse,
-        "MAE": mae,
-    }
-    with open(model_json, "w") as f:
-        json.dump(model_results_dict, f, indent=4, cls=constants.NumpyEncoder)
-    logging.info(f"Saved results to {model_json}")
+    if model_fname is not None:
+        model_json = ml_dir / f"{model_fname}.json"
+        model_results_dict = {
+            "target": target,
+            "regressor": regressor,
+            "frac_train": frac_train,
+            "num_train": len(y_train),
+            "num_test": len(y_test),
+            "ML_params": ML_params,
+            "R2": r2,
+            "RMSE": rmse,
+            "MAE": mae,
+        }
+        with open(model_json, "w") as f:
+            json.dump(model_results_dict, f, indent=4, cls=constants.NumpyEncoder)
+        logging.info(f"Saved results to {model_json}")
 
-    # Plot testing predictions
-    logging.info("Plotting testing predictions")
-    fig_test_pred, _ = plot_predictions(y_test, y_pred_test, target)
-    test_pred_png = (
-        ml_dir
-        / ml_dir
-        / f"pred_test_{target.replace(' ', '').lower()}_{regressor.upper()}_{int(frac_train*100)}.png"
-    )
-    fig_test_pred.savefig(test_pred_png, dpi=300)
-    logging.info(f"Saved to {test_pred_png}")    
-    
-    # Save model
-    with shelve.open(f"{model_shelve}", "w") as db:
-        db["model"] = ML_model
-        db["y_pred_train"] = y_pred_train
-        db["y_pred_test"] = y_pred_test
-    logging.info(f"Saved model and predictions to {model_shelve}")
-    
+        # Plot testing predictions
+        logging.info("Plotting testing predictions")
+        fig_test_pred, _ = plot_predictions(y_test, y_pred_test, target)
+        test_pred_png = (
+            ml_dir
+            / ml_dir
+            / f"pred_test_{target.replace(' ', '').lower()}_{regressor.upper()}_{int(frac_train*100)}.png"
+        )
+        fig_test_pred.savefig(test_pred_png, dpi=300)
+        logging.info(f"Saved to {test_pred_png}")
+
+        # Save model
+        with shelve.open(f"{model_shelve}", "w") as db:
+            db["model"] = ML_model
+            db["y_pred_train"] = y_pred_train
+            db["y_pred_test"] = y_pred_test
+        logging.info(f"Saved model and predictions to {model_shelve}")
+
     logging.info(f"Finished")
 
+    return r2, rmse, mae
 
-def split_data(df_original, frac_train, frac_relax=0.1, target="Formation Energy"):
+
+def split_data(df_original, frac_train, frac_relax=1, target="Formation Energy"):
     """
     Split the prepared data into train and test sets by GASP ID, so that structures from the same relaxation run do not cross between the sets.
     If the data has not been prepared, prepare_ml_data.py will be run first.
@@ -205,7 +273,7 @@ def split_data(df_original, frac_train, frac_relax=0.1, target="Formation Energy
     Args:
         df_original: Dataframe with all the descriptors and target properties
         frac_train: Fraction of data to use for training (default 0.8)
-        frac_relax: Fraction of unrelaxed structures to sample (default 0.1)
+        frac_relax: Fraction of unrelaxed structures to sample (default 1)
 
     Returns:
         df_train: Dataframe with training data
@@ -220,26 +288,17 @@ def split_data(df_original, frac_train, frac_relax=0.1, target="Formation Energy
         high_hadness_idx = df_original[df_original["Hardness"] >= 50].index
         df_original.drop(high_hadness_idx, inplace=True)
     logging.info("Finished")
-    
-    # Use only part of the unrelaxed structures
-    logging.info(f"Sampling {int(frac_relax*100)}% of the unrelaxed structures")
-    frames = []
-    gasp_IDs = df_original["GASP ID"].unique()
-    for gasp_ID in gasp_IDs:
-        df_id = df_original[df_original["GASP ID"] == gasp_ID]
-        run_ids = df_id["Run ID"].to_numpy()
-        run_ids.sort()
-        relaxed_id = run_ids[-1]
-        run_ids = run_ids[:-1]
-        num_select = int(frac_relax*len(run_ids))
-        selected = np.random.choice(run_ids, replace=False, size=num_select)
-        selected = np.append(selected, relaxed_id)
-        df_selected = df_id[df_id["Run ID"].isin(selected)]
-        frames.append(df_selected)
-    df = pd.concat(frames)
+
+    # Use only part of the unrelaxed structures (usually done in the preparation step)
+    if frac_relax < 1:
+        df = prepare_ml_data.sample_unrelaxed(df_original, frac_relax)
+    else:
+        logging.info("Using all unrelaxed structures")
+        df = df_original.copy()
 
     # Split GASP IDs into training and testing sets
     logging.info("Shuffling and splitting data into training and testing sets")
+    gasp_IDs = df_original["GASP ID"].unique()
     np.random.shuffle(gasp_IDs)
     num_train_IDs = int(frac_train * len(gasp_IDs))
     num_test_IDs = len(gasp_IDs) - num_train_IDs
@@ -278,22 +337,22 @@ def split_data(df_original, frac_train, frac_relax=0.1, target="Formation Energy
 
 def create_SVR_model(
     e_scale=1,
-    c_scale=1e3,
+    c_scale=100,
     g_scale=0.01,
-    n_iter=1000,
+    n_iter=500,
 ):
     """
     Create Support Vector Regression model using random search cross-validation.
 
     Parameters
     ----------
-    e_scale : float, default=10
+    e_scale : float, default=1
         Scale for epsilon parameter in SVR cross-validation.
-    c_scale : float, default=1e5
+    c_scale : float, default=100
         Scale for C paramter in SVR cross-validation.
-    g_scale : float, default=0.1
+    g_scale : float, default=0.01
         Scale for gamma parameter in SVR cross-validation.
-    n_iter : int, default=1000
+    n_iter : int, default=500
         Number of iterations for random search cross-validation.
 
     Returns
@@ -389,7 +448,7 @@ def plot_predictions(xx, yy, target):
         Axes object.
     """
     plt.rcParams.update({"font.size": 16})
-    
+
     # Calculate the point density
     try:
         kde = scipy.stats.gaussian_kde([xx, yy])
@@ -409,11 +468,11 @@ def plot_predictions(xx, yy, target):
         np.amax(np.concatenate((xx, yy), axis=None)),
     )
     line_45 = [-100, 100]  # 45 degree line
-    ax.plot(line_45, line_45, "k")  
+    ax.plot(line_45, line_45, "k")
     ax.scatter(xx, yy, c=zz, s=5)
     ax.set(xlim=lims, ylim=lims)
     ax.set_aspect("equal", "box")
-    
+
     if target.lower() == "hardness":
         unit = "GPa"
     else:
