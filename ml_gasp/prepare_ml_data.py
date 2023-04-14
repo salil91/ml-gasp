@@ -12,7 +12,15 @@ Usage: prepare_ml_data.py [OPTIONS]
 
 Options:
   --garun_directory DIRECTORY  Path to directory containing GASP run data
-                               [default: Current working directory]
+                               [default: .]
+  --frac-relax FLOAT           Fraction of unrelaxed structures to sample
+                               [default: 0.1]
+  --d-c FLOAT                  Cut-off distance for RDF calculation  [default:
+                               6.01]
+  --d-k FLOAT                  Cut-off distance for ADF calculation  [default:
+                               6.01]
+  --k FLOAT                    Parameter to control the slope of the logistic
+                               function for the ADF  [default: 2.5]
   --help                       Show this message and exit.
 """
 

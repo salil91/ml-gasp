@@ -6,8 +6,7 @@ Usage: train_model.py [OPTIONS]
 
 Options:
   --garun_directory DIRECTORY     Path to directory containing GASP run data
-                                  [default: /home/salil.bavdekar/ml-
-                                  gasp/ml_gasp]
+                                  [default: .]
   --frac-train FLOAT              Fraction of samples in the training set
                                   [default: 0.8]
   --frac-relax FLOAT              Fraction of unrelaxed structures to sample
