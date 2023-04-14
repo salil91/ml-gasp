@@ -140,7 +140,7 @@ def train_model(garun_directory, frac_train, target, regressor):
     # Plot training predictions
     logging.info("Plotting training predictions")
     y_pred_train = ML_best.predict(X_train)
-    fig_train_pred, _ = plot_predictions(y_train, y_pred_train)
+    fig_train_pred, _ = plot_predictions(y_train, y_pred_train, target)
     train_pred_png = (
         ml_dir
         / ml_dir
@@ -178,7 +178,7 @@ def train_model(garun_directory, frac_train, target, regressor):
 
     # Plot testing predictions
     logging.info("Plotting testing predictions")
-    fig_test_pred, _ = plot_predictions(y_test, y_pred_test)
+    fig_test_pred, _ = plot_predictions(y_test, y_pred_test, target)
     test_pred_png = (
         ml_dir
         / ml_dir
@@ -368,7 +368,7 @@ def create_KRR_model(
     return ML_model
 
 
-def plot_predictions(xx, yy):
+def plot_predictions(xx, yy, target):
     """
     Plot predicted vs. expected values using a gaussian kernel density estimate.
 
@@ -378,12 +378,18 @@ def plot_predictions(xx, yy):
         Expected values.
     yy : array-like
         Predicted values.
+    target : str
+        Regression target.
 
     Returns
     -------
     fig : matplotlib.figure.Figure
         Figure object.
+    ax : matplotlib.axes.Axes
+        Axes object.
     """
+    plt.rcParams.update({"font.size": 16})
+    
     # Calculate the point density
     try:
         kde = scipy.stats.gaussian_kde([xx, yy])
@@ -405,10 +411,15 @@ def plot_predictions(xx, yy):
     line_45 = [-100, 100]  # 45 degree line
     ax.plot(line_45, line_45, "k")  
     ax.scatter(xx, yy, c=zz, s=5)
-    ax.set_aspect("equal", "box")
-    ax.set_xlabel("Expected")
-    ax.set_ylabel("Predicted")
     ax.set(xlim=lims, ylim=lims)
+    ax.set_aspect("equal", "box")
+    
+    if target.lower() == "hardness":
+        unit = "GPa"
+    else:
+        unit = "eV/atom"
+    ax.set_xlabel(f"Expected ({unit})")
+    ax.set_ylabel(f"Predicted ({unit})")
 
     return fig, ax
 
